@@ -1,0 +1,11 @@
+Model Information:
+* title:	2022 Porche 911 GT3 RSR
+* source:	https://sketchfab.com/3d-models/2022-porche-911-gt3-rsr-6370209fd29e4752b53fea3dcceeea13
+* author:	No Limits (https://sketchfab.com/nolimitsofficial)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "2022 Porche 911 GT3 RSR" (https://sketchfab.com/3d-models/2022-porche-911-gt3-rsr-6370209fd29e4752b53fea3dcceeea13) by No Limits (https://sketchfab.com/nolimitsofficial) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
