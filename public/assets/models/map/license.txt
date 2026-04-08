@@ -1,0 +1,11 @@
+Model Information:
+* title:	Low Poly Map
+* source:	https://sketchfab.com/3d-models/low-poly-map-1382b4fb561842bca9dfcbc22a48a9bc
+* author:	EgoRich (https://sketchfab.com/egoriches)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Low Poly Map" (https://sketchfab.com/3d-models/low-poly-map-1382b4fb561842bca9dfcbc22a48a9bc) by EgoRich (https://sketchfab.com/egoriches) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
