@@ -2,7 +2,7 @@ import * as THREE from 'https://cdn.skypack.dev/three@0.129.0/build/three.module
 import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
 
 const scene = new THREE.Scene();
-
+scene.background = new THREE.Color(135 / 255, 206 / 255, 235 / 255);
 // Camera
 const camera = new THREE.PerspectiveCamera(
     75,
@@ -32,7 +32,7 @@ let mapObject, droneObject;
 
 // Drone parameters
 let speed = 0;
-const maxSpeed = 0.2;
+const maxSpeed = 0.5;
 const turnSpeed = 0.03;
 let pitch = 0; // rotatie naar boven/beneden
 let droneMixer; // globale mixer
@@ -72,13 +72,23 @@ loader.load('assets/models/map/scene.gltf', (gltf) => {
         // Als het model animaties heeft
         if (gltfDrone.animations && gltfDrone.animations.length > 0) {
             droneMixer = new THREE.AnimationMixer(droneObject);
-            gltfDrone.animations.forEach((clip) => {
-                droneMixer.clipAction(clip).play();
-            });
+
+            const hoverClip = gltfDrone.animations.find(
+                clip => clip.name.toLowerCase() === 'hover'
+            );
+
+            if (hoverClip) {
+                droneMixer.clipAction(hoverClip).play();
+            } else {
+                console.warn("Hover animatie niet gevonden");
+                console.log(gltfDrone.animations); // debug
+            }
         }
 
+
+
         // Camera init
-        camera.position.set(droneObject.position.x, droneObject.position.y + 2, droneObject.position.z + 5);
+        camera.position.set(droneObject.position.x, droneObject.position.y + 102, droneObject.position.z + 50);
         camera.lookAt(droneObject.position);
     });
 });
@@ -86,36 +96,42 @@ loader.load('assets/models/map/scene.gltf', (gltf) => {
 // Update drone beweging
 function updateDrone() {
     if (!droneObject) return;
+    droneObject.rotation.order = "YXZ";
 
-    // Bereken pitch op basis van muis
-    const minY = 0;
-    const maxY = window.innerHeight;
-    const mouseRatio = (mouseY - minY) / (maxY - minY); // 0 (top) → 1 (bottom)
-    pitch = THREE.MathUtils.lerp(-Math.PI / 6, Math.PI / 6, 1 - mouseRatio); // max ±30 graden
+    // --- Pitch (voor/achter kantelen via W/S)
+    let targetPitch = 0;
+    if (keys['w']) targetPitch = -0.3; // naar voren
+    else if (keys['s']) targetPitch = 0.3; // naar achter
+    droneObject.rotation.x += (targetPitch - droneObject.rotation.x) * 0.1;
 
-    // Pas rotatie aan (pitch omhoog/omlaag)
-    droneObject.rotation.x = pitch;
+    // --- Roll (kantelen bij A/D)
+    let targetRoll = 0;
+    if (keys['a']) targetRoll = 0.3;   // tilt naar links tijdens bocht
+    else if (keys['d']) targetRoll = -0.3; // tilt naar rechts tijdens bocht
+    droneObject.rotation.z += (targetRoll - droneObject.rotation.z) * 0.1;
 
-    // Vooruit / achteruit
-    if (keys['w']) speed = maxSpeed;
-    else if (keys['s']) speed = -maxSpeed;
-    else speed = 0;
-
-    // Rotatie links/rechts
+    // --- Yaw (draai links/rechts via A/D)
     if (keys['a']) droneObject.rotation.y += turnSpeed;
     if (keys['d']) droneObject.rotation.y -= turnSpeed;
 
-    // Update positie gebaseerd op yaw + pitch
+    // --- Hoogte (Y-as) via pijlen ↑ / ↓
+    if (keys['arrowup']) droneObject.position.y += maxSpeed;
+    if (keys['arrowdown']) droneObject.position.y -= maxSpeed;
+
+    // --- Vooruit / achteruit beweging (relatief aan yaw)
+    let speed = 0;
+    if (keys['w']) speed = maxSpeed;
+    else if (keys['s']) speed = -maxSpeed;
+
     const forward = new THREE.Vector3(
         -Math.sin(droneObject.rotation.y) * Math.cos(droneObject.rotation.x),
-        Math.sin(droneObject.rotation.x),
+        0, // verticale beweging via pijlen
         -Math.cos(droneObject.rotation.y) * Math.cos(droneObject.rotation.x)
     );
-
     droneObject.position.add(forward.multiplyScalar(speed));
 
-    // Camera volgt drone (third person)
-    const offset = new THREE.Vector3(0, 2, 5);
+    // --- Camera volgt drone
+    const offset = new THREE.Vector3(0, 5, 10);
     const rotatedOffset = offset.clone();
     rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), droneObject.rotation.y);
     camera.position.copy(droneObject.position.clone().add(rotatedOffset));
