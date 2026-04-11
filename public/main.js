@@ -1,6 +1,23 @@
 import * as THREE from 'https://cdn.skypack.dev/three@0.129.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
 
+
+
+// maak WebSocket verbinding
+const ws = new WebSocket('ws://192.168.2.33:8080');
+
+let joystickX = 0, joystickY = 0, heightInput = 0;
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    console.log("📡 Received:", data);
+
+    joystickX = data.roll ?? 0;
+    joystickY = data.pitch ?? 0;
+    heightInput = data.throttle ?? 0;
+};
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(135 / 255, 206 / 255, 235 / 255);
 // Camera
@@ -81,7 +98,7 @@ loader.load('assets/models/map/scene.gltf', (gltf) => {
                 droneMixer.clipAction(hoverClip).play();
             } else {
                 console.warn("Hover animatie niet gevonden");
-                console.log(gltfDrone.animations); // debug
+                // console.log(gltfDrone.animations); // debug
             }
         }
 
@@ -94,46 +111,118 @@ loader.load('assets/models/map/scene.gltf', (gltf) => {
 });
 
 // Update drone beweging
-function updateDrone() {
+// function updateDrone() {
+//     if (!droneObject) return;
+//     droneObject.rotation.order = "YXZ";
+
+//     // --- Pitch (voor/achter kantelen via W/S of joystick)
+//     let targetPitch = 0;
+//     if (keys['w']) targetPitch = -0.3; // naar voren
+//     else if (keys['s']) targetPitch = 0.3; // naar achter
+//     else targetPitch = -joystickY * 0.3; // mobile joystick
+//     droneObject.rotation.x += (targetPitch - droneObject.rotation.x) * 0.1;
+
+//     // --- Roll (kantelen bij A/D of joystick)
+//     let targetRoll = 0;
+//     if (keys['a']) targetRoll = 0.3;   // tilt naar links tijdens bocht
+//     else if (keys['d']) targetRoll = -0.3; // tilt naar rechts tijdens bocht
+//     else targetRoll = -joystickX * 0.3; // mobile joystick
+//     droneObject.rotation.z += (targetRoll - droneObject.rotation.z) * 0.1;
+
+//     // --- Yaw (draai links/rechts via A/D of joystick)
+//     if (keys['a']) droneObject.rotation.y += turnSpeed;
+//     else if (keys['d']) droneObject.rotation.y -= turnSpeed;
+//     else droneObject.rotation.y += -joystickX * turnSpeed; // mobile
+
+//     // --- Hoogte (Y-as) via pijlen ↑ / ↓ of slider)
+//     if (keys['arrowup']) droneObject.position.y += maxSpeed;
+//     else if (keys['arrowdown']) droneObject.position.y -= maxSpeed;
+//     else droneObject.position.y += heightInput * maxSpeed; // mobile
+
+//     // --- Vooruit / achteruit beweging (relatief aan yaw)
+//     let speed = 0;
+//     if (keys['w']) speed = maxSpeed;
+//     else if (keys['s']) speed = -maxSpeed;
+//     else speed = -joystickY * maxSpeed; // mobile
+
+//     const forward = new THREE.Vector3(
+//         -Math.sin(droneObject.rotation.y) * Math.cos(droneObject.rotation.x),
+//         0, // verticale beweging via pijlen
+//         -Math.cos(droneObject.rotation.y) * Math.cos(droneObject.rotation.x)
+//     );
+//     droneObject.position.add(forward.multiplyScalar(speed));
+
+//     // --- Camera volgt drone
+//     const offset = new THREE.Vector3(0, 5, 10);
+//     const rotatedOffset = offset.clone();
+//     rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), droneObject.rotation.y);
+//     camera.position.copy(droneObject.position.clone().add(rotatedOffset));
+//     camera.lookAt(droneObject.position);
+// }
+
+
+function getInput() {
+    let throttle = 0;
+    let pitch = 0;
+    let roll = 0;
+    let yaw = 0;
+
+    // Keyboard
+    if (keys['w']) pitch = -1;
+    else if (keys['s']) pitch = 1;
+    else pitch = -joystickY;
+
+    if (keys['a']) roll = 1;
+    else if (keys['d']) roll = -1;
+    else roll = -joystickX;
+
+    if (keys['a']) yaw = 1;
+    else if (keys['d']) yaw = -1;
+    else yaw = -joystickX;
+
+    if (keys['arrowup']) throttle = 1;
+    else if (keys['arrowdown']) throttle = -1;
+    else throttle = heightInput;
+
+    return { throttle, pitch, roll, yaw };
+}
+
+export function updateDrone({ throttle, pitch, roll, yaw }) {
+    // console.log("Updating drone with:", { throttle, pitch, roll, yaw });
     if (!droneObject) return;
+
     droneObject.rotation.order = "YXZ";
 
-    // --- Pitch (voor/achter kantelen via W/S)
-    let targetPitch = 0;
-    if (keys['w']) targetPitch = -0.3; // naar voren
-    else if (keys['s']) targetPitch = 0.3; // naar achter
+    // Pitch
+    const targetPitch = pitch * 0.3;
     droneObject.rotation.x += (targetPitch - droneObject.rotation.x) * 0.1;
 
-    // --- Roll (kantelen bij A/D)
-    let targetRoll = 0;
-    if (keys['a']) targetRoll = 0.3;   // tilt naar links tijdens bocht
-    else if (keys['d']) targetRoll = -0.3; // tilt naar rechts tijdens bocht
+    // Roll
+    const targetRoll = roll * 0.3;
     droneObject.rotation.z += (targetRoll - droneObject.rotation.z) * 0.1;
 
-    // --- Yaw (draai links/rechts via A/D)
-    if (keys['a']) droneObject.rotation.y += turnSpeed;
-    if (keys['d']) droneObject.rotation.y -= turnSpeed;
+    // Yaw
+    droneObject.rotation.y += yaw * turnSpeed;
 
-    // --- Hoogte (Y-as) via pijlen ↑ / ↓
-    if (keys['arrowup']) droneObject.position.y += maxSpeed;
-    if (keys['arrowdown']) droneObject.position.y -= maxSpeed;
+    // Hoogte
+    droneObject.position.y += throttle * maxSpeed;
 
-    // --- Vooruit / achteruit beweging (relatief aan yaw)
-    let speed = 0;
-    if (keys['w']) speed = maxSpeed;
-    else if (keys['s']) speed = -maxSpeed;
+    // Forward movement
+    const speed = -pitch * maxSpeed;
 
     const forward = new THREE.Vector3(
         -Math.sin(droneObject.rotation.y) * Math.cos(droneObject.rotation.x),
-        0, // verticale beweging via pijlen
+        0,
         -Math.cos(droneObject.rotation.y) * Math.cos(droneObject.rotation.x)
     );
+
     droneObject.position.add(forward.multiplyScalar(speed));
 
-    // --- Camera volgt drone
+    // Camera
     const offset = new THREE.Vector3(0, 5, 10);
     const rotatedOffset = offset.clone();
     rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), droneObject.rotation.y);
+
     camera.position.copy(droneObject.position.clone().add(rotatedOffset));
     camera.lookAt(droneObject.position);
 }
@@ -145,7 +234,7 @@ function animate() {
     const delta = clock.getDelta();
     if (droneMixer) droneMixer.update(delta); // ⚡ update animaties
 
-    updateDrone();
+    updateDrone(getInput()); // ⚡ update drone beweging
     renderer.render(scene, camera);
 }
 
@@ -155,5 +244,26 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+
+// ws.onopen = () => console.log("🟢 OPEN");
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "main"
+  }));
+};
+ws.onclose = (e) => {
+    console.log("🔴 CLOSED");
+    console.log("Code:", e.code);
+    console.log("Reason:", e.reason);
+    console.log("Clean:", e.wasClean);
+};
+ws.onerror = (e) => {
+    console.log("❌ ERROR", e);
+};
+ws.onerror = (err) => {
+    console.log("❌ WebSocket error:", err);
+};
+
 
 animate();
