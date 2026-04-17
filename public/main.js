@@ -70,17 +70,18 @@ function createPlayer(id) {
 
         console.log("✅ Player created:", id);
 
-        function removePlayer(id) {
-            const player = players[id];
-            if (!player) return;
-
-            scene.remove(player.drone);
-
-            delete players[id];
-
-            console.log("🗑️ Player removed:", id);
-        }
     });
+}
+
+function removePlayer(id) {
+    const player = players[id];
+    if (!player) return;
+
+    scene.remove(player.drone);
+
+    delete players[id];
+
+    console.log("🗑️ Player removed:", id);
 }
 
 // 📡 Ontvang data van server
