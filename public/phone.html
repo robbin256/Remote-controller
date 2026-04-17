@@ -5,8 +5,6 @@
     <meta charset="UTF-8">
     <title>Drone Controller</title>
     <link rel="stylesheet" href="assets/css/phone.css">
-
-
 </head>
 
 <body>
@@ -14,24 +12,39 @@
         <section class="screen">
             <h1 class="title">Drone Controller</h1>
 
+            <!-- 🎮 PLAYER SELECT -->
+            <!-- <article class="panel">
+                <div class="panel-title">Speler</div>
+                <select id="playerSelect">
+                    <option value="1">Speler 1</option>
+                    <option value="2">Speler 2</option>
+                    <option value="3">Speler 3</option>
+                    <option value="4">Speler 4</option>
+                </select>
+            </article> -->
+
+            <!-- 🔼 HOOGTE -->
             <article class="panel slider-block">
-                <div class="panel-title">Op/Neer</div>
+                <div class="panel-title">Op / Neer</div>
                 <div class="slider-wrapper">
                     <input type="range" id="heightSlider" min="-1" max="1" step="0.01" value="0">
-                    <!-- <div class="slider-value"><span id="heightValue">0%</span></div> -->
                 </div>
-                <div style="color: #7f94c4; font-size: 0.95rem; text-align: center;">Gebruik de slider om de hoogte van
-                    de drone te regelen.</div>
+                <div style="color: #7f94c4; font-size: 0.95rem; text-align: center;">
+                    Gebruik de slider om de hoogte te regelen
+                </div>
             </article>
 
+            <!-- 🕹️ JOYSTICK -->
             <article class="panel joystick-block">
                 <div class="joystick-top">
-                    <span class="icon">🧭</span>
-                    <span>Alle</span>
+                    <span>🧭</span>
+                    <span>Besturing</span>
                 </div>
+
                 <div id="joystick">
                     <div class="joystick-handle"></div>
                 </div>
+
                 <div class="joystick-stats">
                     <div>L/R: <span id="lrValue">0%</span></div>
                     <div>V/A: <span id="vaValue">0%</span></div>
@@ -40,139 +53,115 @@
         </section>
     </div>
 
+    <!-- joystick lib -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
+
     <script>
         const ws = new WebSocket('ws://192.168.2.33:8080');
-        let joystickX = 0, joystickY = 0, heightInput = 0;
+
+        let joystickX = 0;
+        let joystickY = 0;
+        let heightInput = 0;
+        let playerId = null;
+
+        ws.onopen = () => {
+            console.log("🟢 Connected");
+
+            ws.send(JSON.stringify({
+                type: "join"
+            }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "assigned") {
+                playerId = data.playerId;
+                console.log("🎮 Assigned player:", playerId);
+            }
+
+            if (data.type === "full") {
+                alert("Game is vol!");
+            }
+        };
+
         const lrValue = document.getElementById('lrValue');
         const vaValue = document.getElementById('vaValue');
-        const heightValue = document.getElementById('heightValue');
         const joystickHandle = document.querySelector('.joystick-handle');
         const joystickElement = document.getElementById('joystick');
+        // const playerSelect = document.getElementById('playerSelect');
 
-        // Verbeterde nipplejs-configuratie voor touchscreen
+        // 🎮 speler kiezen
+        // playerSelect.addEventListener('change', (e) => {
+        //     playerId = parseInt(e.target.value);
+        //     console.log("🎮 Player gekozen:", playerId);
+        // });
+
+        // 🕹️ joystick
         const joystick = nipplejs.create({
             zone: joystickElement,
             mode: 'static',
             position: { left: '50%', top: '50%' },
             color: '#2ee78c',
-            size: 120,
-            restOpacity: 0.55,
-            lockX: false,
-            lockY: false,
-            threshold: 0.1,
-            fadeTime: 250,
-            catchDistance: 200
+            size: 120
         });
 
-        // Direct touch handling voor betere responsiviteit
-        function handleTouchInput(e) {
-            const touch = e.touches[0] || e.changedTouches[0];
-            const rect = joystickElement.getBoundingClientRect();
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
+        joystick.on('move', (evt, data) => {
+            joystickX = data.vector.x;
+            joystickY = data.vector.y;
 
-            const dx = touch.clientX - centerX;
-            const dy = touch.clientY - centerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const maxDistance = rect.width / 2;
+            const x = data.distance * data.vector.x;
+            const y = data.distance * data.vector.y;
 
-            if (distance > 0) {
-                joystickX = Math.max(-1, Math.min(1, dx / maxDistance));
-                joystickY = Math.max(-1, Math.min(1, dy / maxDistance));
+            joystickHandle.style.transform =
+                `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
 
-                const handleX = joystickX * (maxDistance * 0.6);
-                const handleY = joystickY * (maxDistance * 0.6);
-                joystickHandle.style.transform = `translate(calc(-50% + ${handleX}px), calc(-50% + ${handleY}px))`;
-                updateStatus();
-            }
-        }
+            sendData();
+        });
 
-        function handleTouchEnd() {
+        joystick.on('end', () => {
             joystickX = 0;
             joystickY = 0;
+
             joystickHandle.style.transform = 'translate(-50%, -50%)';
-            updateStatus();
-        }
 
-        // Touch event listeners
-        joystickElement.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handleTouchInput(e);
+            sendData();
         });
 
-        joystickElement.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            handleTouchInput(e);
+        // 🔼 slider
+        const slider = document.getElementById('heightSlider');
+
+        slider.addEventListener('input', e => {
+            heightInput = parseFloat(e.target.value);
+            sendData();
         });
 
-        joystickElement.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            handleTouchEnd();
-        });
+        // 📡 send data
+        function sendData() {
+            if (!playerId) return; // 👈 wacht tot je ID hebt
 
-        // Mouse fallback
-        joystickElement.addEventListener('mousedown', () => {
-            joystickElement.addEventListener('mousemove', handleTouchInput);
-            joystickElement.addEventListener('mouseup', () => {
-                joystickElement.removeEventListener('mousemove', handleTouchInput);
-            });
-        });
-
-
-        function updateStatus() {
-            // heightValue.textContent = `${Math.round(heightInput * 100)}%`;
-            lrValue.textContent = `${Math.round(joystickX * 100)}%`;
-            vaValue.textContent = `${Math.round(-joystickY * 100)}%`;
-            console.log(ws.readyState)
-            // console.log(`Updated Status - Throttle: ${heightInput.toFixed(2)}, Pitch: ${(-joystickY).toFixed(2)}, Roll: ${joystickX.toFixed(2)}`);
             if (ws.readyState === WebSocket.OPEN) {
-                console.log(`Sending: Throttle=${heightInput.toFixed(2)}, Pitch=${(-joystickY).toFixed(2)}, Roll=${joystickX.toFixed(2)}`);
                 ws.send(JSON.stringify({
-                    type: "phone", throttle: heightInput,
+                    type: "phone",
+                    playerId: playerId,
+                    throttle: heightInput,
                     pitch: -joystickY,
                     roll: joystickX
                 }));
             }
         }
 
-        joystick.on('move', (evt, data) => {
-            joystickX = data.vector.x;
-            joystickY = data.vector.y;
-            const x = data.distance * data.vector.x;
-            const y = data.distance * data.vector.y;
-            joystickHandle.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
-            updateStatus();
-        });
+        // 🔌 websocket events
+        ws.onopen = () => {
+            console.log("🟢 Connected");
 
-        joystick.on('end', () => {
-            joystickX = 0;
-            joystickY = 0;
-            joystickHandle.style.transform = 'translate(-50%, -50%)';
-            updateStatus();
-        });
+            ws.send(JSON.stringify({
+                type: "join"
+            }));
+        }; ws.onclose = () => console.log("🔴 Disconnected");
+        ws.onerror = (err) => console.log("❌ WS error:", err);
 
-        const slider = document.getElementById('heightSlider');
-        slider.addEventListener('input', e => {
-            heightInput = parseFloat(e.target.value);
-            updateStatus();
-        });
-
-        ws.onopen = () => console.log("🟢 OPEN");
-        ws.onclose = (e) => {
-            console.log("🔴 CLOSED");
-            console.log("Code:", e.code);
-            console.log("Reason:", e.reason);
-            console.log("Clean:", e.wasClean);
-        };
-        ws.onerror = (e) => {
-            console.log("❌ ERROR", e);
-        };
-        ws.onerror = (err) => {
-            console.log("❌ WebSocket error:", err);
-        };
-
-        updateStatus();
+        sendData();
     </script>
 </body>
 

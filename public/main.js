@@ -1,269 +1,235 @@
 import * as THREE from 'https://cdn.skypack.dev/three@0.129.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
 
-
-
-// maak WebSocket verbinding
+// 🌐 WebSocket
 const ws = new WebSocket('ws://192.168.2.33:8080');
 
-let joystickX = 0, joystickY = 0, heightInput = 0;
+// 🎮 Players systeem
+let players = {};
+const MAX_PLAYERS = 4;
 
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-
-    console.log("📡 Received:", data);
-
-    joystickX = data.roll ?? 0;
-    joystickY = data.pitch ?? 0;
-    heightInput = data.throttle ?? 0;
-};
-
+// 🌍 Scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(135 / 255, 206 / 255, 235 / 255);
-// Camera
-const camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.01,
-    1000
-);
 
-// Renderer
+// 🎥 Renderer
 const renderer = new THREE.WebGLRenderer({ alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById('container3D').appendChild(renderer.domElement);
 
-// Lights
-const toplight = new THREE.DirectionalLight(0xffffff, 1);
-toplight.position.set(500, 500, 500);
-scene.add(toplight);
+// 💡 Lights
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(500, 500, 500);
+scene.add(light);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-scene.add(ambientLight);
-
-// Axes helper
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 scene.add(new THREE.AxesHelper(5));
 
+// 📦 Loader
 const loader = new GLTFLoader();
-let mapObject, droneObject;
 
-// Drone parameters
-let speed = 0;
+// 🚁 Drone settings
 const maxSpeed = 0.5;
 const turnSpeed = 0.03;
-let pitch = 0; // rotatie naar boven/beneden
-let droneMixer; // globale mixer
-let clock = new THREE.Clock();
 
-// Keyboard input
-const keys = {};
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+// ⏱ Clock
+const clock = new THREE.Clock();
 
-// Mouse input
-let mouseY = window.innerHeight / 2;
-window.addEventListener('mousemove', (e) => {
-    mouseY = e.clientY;
-});
-
-// Load map
+// 🗺️ Map laden
 loader.load('assets/models/map/scene.gltf', (gltf) => {
-    mapObject = gltf.scene;
-    mapObject.scale.set(0.1, 0.1, 0.1);
-    mapObject.position.set(0, 0, 0);
-    scene.add(mapObject);
+    const map = gltf.scene;
+    map.scale.set(0.1, 0.1, 0.1);
+    scene.add(map);
 
-    // Load drone
-    loader.load('assets/models/drone/scene.gltf', (gltfDrone) => {
-        droneObject = gltfDrone.scene;
-        droneObject.scale.set(5, 5, 5);
-
-        // Center drone
-        const box = new THREE.Box3().setFromObject(droneObject);
-        const center = box.getCenter(new THREE.Vector3());
-        droneObject.position.sub(center);
-        droneObject.position.y += 0.1;
-
-        scene.add(droneObject);
-
-        // Als het model animaties heeft
-        if (gltfDrone.animations && gltfDrone.animations.length > 0) {
-            droneMixer = new THREE.AnimationMixer(droneObject);
-
-            const hoverClip = gltfDrone.animations.find(
-                clip => clip.name.toLowerCase() === 'hover'
-            );
-
-            if (hoverClip) {
-                droneMixer.clipAction(hoverClip).play();
-            } else {
-                console.warn("Hover animatie niet gevonden");
-                // console.log(gltfDrone.animations); // debug
-            }
-        }
-
-
-
-        // Camera init
-        camera.position.set(droneObject.position.x, droneObject.position.y + 102, droneObject.position.z + 50);
-        camera.lookAt(droneObject.position);
-    });
+    // Maak 4 players
 });
 
-// Update drone beweging
-// function updateDrone() {
-//     if (!droneObject) return;
-//     droneObject.rotation.order = "YXZ";
+// 👤 Player maken
+function createPlayer(id) {
+    loader.load('assets/models/drone/scene.gltf', (gltfDrone) => {
+        const drone = gltfDrone.scene;
+        drone.scale.set(5, 5, 5);
 
-//     // --- Pitch (voor/achter kantelen via W/S of joystick)
-//     let targetPitch = 0;
-//     if (keys['w']) targetPitch = -0.3; // naar voren
-//     else if (keys['s']) targetPitch = 0.3; // naar achter
-//     else targetPitch = -joystickY * 0.3; // mobile joystick
-//     droneObject.rotation.x += (targetPitch - droneObject.rotation.x) * 0.1;
+        // beetje spreiden
+        drone.position.set(id * 2, 1, 0);
 
-//     // --- Roll (kantelen bij A/D of joystick)
-//     let targetRoll = 0;
-//     if (keys['a']) targetRoll = 0.3;   // tilt naar links tijdens bocht
-//     else if (keys['d']) targetRoll = -0.3; // tilt naar rechts tijdens bocht
-//     else targetRoll = -joystickX * 0.3; // mobile joystick
-//     droneObject.rotation.z += (targetRoll - droneObject.rotation.z) * 0.1;
+        scene.add(drone);
 
-//     // --- Yaw (draai links/rechts via A/D of joystick)
-//     if (keys['a']) droneObject.rotation.y += turnSpeed;
-//     else if (keys['d']) droneObject.rotation.y -= turnSpeed;
-//     else droneObject.rotation.y += -joystickX * turnSpeed; // mobile
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.01,
+            1000
+        );
 
-//     // --- Hoogte (Y-as) via pijlen ↑ / ↓ of slider)
-//     if (keys['arrowup']) droneObject.position.y += maxSpeed;
-//     else if (keys['arrowdown']) droneObject.position.y -= maxSpeed;
-//     else droneObject.position.y += heightInput * maxSpeed; // mobile
+        players[id] = {
+            drone,
+            camera,
+            input: { throttle: 0, pitch: 0, roll: 0, yaw: 0 }
+        };
 
-//     // --- Vooruit / achteruit beweging (relatief aan yaw)
-//     let speed = 0;
-//     if (keys['w']) speed = maxSpeed;
-//     else if (keys['s']) speed = -maxSpeed;
-//     else speed = -joystickY * maxSpeed; // mobile
+        console.log("✅ Player created:", id);
 
-//     const forward = new THREE.Vector3(
-//         -Math.sin(droneObject.rotation.y) * Math.cos(droneObject.rotation.x),
-//         0, // verticale beweging via pijlen
-//         -Math.cos(droneObject.rotation.y) * Math.cos(droneObject.rotation.x)
-//     );
-//     droneObject.position.add(forward.multiplyScalar(speed));
+        function removePlayer(id) {
+            const player = players[id];
+            if (!player) return;
 
-//     // --- Camera volgt drone
-//     const offset = new THREE.Vector3(0, 5, 10);
-//     const rotatedOffset = offset.clone();
-//     rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), droneObject.rotation.y);
-//     camera.position.copy(droneObject.position.clone().add(rotatedOffset));
-//     camera.lookAt(droneObject.position);
-// }
+            scene.remove(player.drone);
 
+            delete players[id];
 
-function getInput() {
-    let throttle = 0;
-    let pitch = 0;
-    let roll = 0;
-    let yaw = 0;
-
-    // Keyboard
-    if (keys['w']) pitch = -1;
-    else if (keys['s']) pitch = 1;
-    else pitch = -joystickY;
-
-    if (keys['a']) roll = 1;
-    else if (keys['d']) roll = -1;
-    else roll = -joystickX;
-
-    if (keys['a']) yaw = 1;
-    else if (keys['d']) yaw = -1;
-    else yaw = -joystickX;
-
-    if (keys['arrowup']) throttle = 1;
-    else if (keys['arrowdown']) throttle = -1;
-    else throttle = heightInput;
-
-    return { throttle, pitch, roll, yaw };
+            console.log("🗑️ Player removed:", id);
+        }
+    });
 }
 
-export function updateDrone({ throttle, pitch, roll, yaw }) {
-    // console.log("Updating drone with:", { throttle, pitch, roll, yaw });
-    if (!droneObject) return;
+// 📡 Ontvang data van server
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
 
-    droneObject.rotation.order = "YXZ";
+    // 🎮 nieuwe speler
+    if (data.type === "playerJoined") {
+        console.log("🎮 Player joined:", data.playerId);
+        createPlayer(data.playerId);
+        return;
+    }
+
+    // ❌ speler weg
+    if (data.type === "playerLeft") {
+        console.log("❌ Player left:", data.playerId);
+        removePlayer(data.playerId);
+        return;
+    }
+
+    // 📡 input
+    const id = data.playerId;
+    if (!players[id]) return;
+
+    players[id].input = {
+        throttle: data.throttle ?? 0,
+        pitch: data.pitch ?? 0,
+        roll: -(data.roll ?? 0),
+        yaw: -(data.roll ?? 0)
+    };
+};
+
+// 🚁 Drone update
+function updateDrone(player) {
+    const { drone, camera, input } = player;
+    if (!drone) return;
+
+    const { throttle, pitch, roll, yaw } = input;
+
+    drone.rotation.order = "YXZ";
 
     // Pitch
     const targetPitch = pitch * 0.3;
-    droneObject.rotation.x += (targetPitch - droneObject.rotation.x) * 0.1;
+    drone.rotation.x += (targetPitch - drone.rotation.x) * 0.1;
 
     // Roll
     const targetRoll = roll * 0.3;
-    droneObject.rotation.z += (targetRoll - droneObject.rotation.z) * 0.1;
+    drone.rotation.z += (targetRoll - drone.rotation.z) * 0.1;
 
     // Yaw
-    droneObject.rotation.y += yaw * turnSpeed;
+    drone.rotation.y += yaw * turnSpeed;
 
     // Hoogte
-    droneObject.position.y += throttle * maxSpeed;
+    drone.position.y += throttle * maxSpeed;
 
-    // Forward movement
+    // Vooruit
     const speed = -pitch * maxSpeed;
 
     const forward = new THREE.Vector3(
-        -Math.sin(droneObject.rotation.y) * Math.cos(droneObject.rotation.x),
+        -Math.sin(drone.rotation.y),
         0,
-        -Math.cos(droneObject.rotation.y) * Math.cos(droneObject.rotation.x)
+        -Math.cos(drone.rotation.y)
     );
 
-    droneObject.position.add(forward.multiplyScalar(speed));
+    drone.position.add(forward.multiplyScalar(speed));
 
-    // Camera
+    // Camera volgt
     const offset = new THREE.Vector3(0, 5, 10);
     const rotatedOffset = offset.clone();
-    rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), droneObject.rotation.y);
+    rotatedOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), drone.rotation.y);
 
-    camera.position.copy(droneObject.position.clone().add(rotatedOffset));
-    camera.lookAt(droneObject.position);
+    camera.position.copy(drone.position.clone().add(rotatedOffset));
+    camera.lookAt(drone.position);
 }
 
-// Render loop
+// 🖥️ Split screen render
+function renderSplitScreen() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const ids = Object.keys(players);
+    const count = ids.length;
+
+    renderer.setScissorTest(true);
+
+    ids.forEach((id, index) => {
+        const player = players[id];
+        if (!player) return;
+
+        let x = 0, y = 0, w = width, h = height;
+
+        if (count === 1) {
+            // fullscreen
+        }
+
+        else if (count === 2) {
+            w = width / 2;
+            x = index * w;
+        }
+
+        else {
+            // 3 of 4 spelers
+            w = width / 2;
+            h = height / 2;
+            x = (index % 2) * w;
+            y = index < 2 ? h : 0;
+        }
+
+        renderer.setViewport(x, y, w, h);
+        renderer.setScissor(x, y, w, h);
+
+        player.camera.aspect = w / h;
+        player.camera.updateProjectionMatrix();
+
+        renderer.render(scene, player.camera);
+    });
+}
+
+// 🔄 Loop
 function animate() {
     requestAnimationFrame(animate);
 
-    const delta = clock.getDelta();
-    if (droneMixer) droneMixer.update(delta); // ⚡ update animaties
+    Object.values(players).forEach(player => {
+        updateDrone(player);
+    });
 
-    updateDrone(getInput()); // ⚡ update drone beweging
-    renderer.render(scene, camera);
+    renderSplitScreen();
 }
 
-// Resize
+// 📐 Resize
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-
-// ws.onopen = () => console.log("🟢 OPEN");
+// 🔌 WebSocket connect
 ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: "main"
-  }));
-};
-ws.onclose = (e) => {
-    console.log("🔴 CLOSED");
-    console.log("Code:", e.code);
-    console.log("Reason:", e.reason);
-    console.log("Clean:", e.wasClean);
-};
-ws.onerror = (e) => {
-    console.log("❌ ERROR", e);
-};
-ws.onerror = (err) => {
-    console.log("❌ WebSocket error:", err);
+    console.log("🟢 Connected");
+
+    ws.send(JSON.stringify({
+        type: "main"
+    }));
 };
 
+ws.onerror = (err) => {
+    console.log("❌ WS error:", err);
+};
+
+ws.onclose = () => {
+    console.log("🔴 Disconnected");
+};
 
 animate();

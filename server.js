@@ -10,9 +10,10 @@ const wss = new WebSocketServer({ server });
 const port = 8080;
 const root = path.resolve(__dirname, 'public');
 
-// Clients
-let phoneClient = null;
 let mainClients = new Set();
+let phoneClients = new Map(); // playerId → ws
+
+const MAX_PLAYERS = 4;
 
 app.use(express.static(root));
 
@@ -20,34 +21,71 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(root, 'index.html'));
 });
 
+// 🔢 helper: vind vrije playerId
+function getFreePlayerId() {
+  for (let i = 1; i <= MAX_PLAYERS; i++) {
+    if (!phoneClients.has(i)) return i;
+  }
+  return null;
+}
+
 wss.on('connection', (ws) => {
   console.log("Client connected");
 
-  ws.isMain = false;
-  ws.isPhone = false;
+  ws.playerId = null;
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      // console.log("Received:", data);
 
-      // 🖥️ REGISTER MAIN CLIENT
+      // 🖥️ MAIN CLIENT
       if (data.type === "main") {
-        ws.isMain = true;
         mainClients.add(ws);
-        console.log("🖥️ Main client registered");
+        console.log("🖥️ Main connected");
         return;
       }
 
-      // 📱 PHONE INPUT
-      if (data.type === "phone") {
-        ws.isPhone = true;
-        phoneClient = ws;
+      // 📱 PHONE JOIN
+      if (data.type === "join") {
+        const id = getFreePlayerId();
 
-        console.log("📱 Phone input received");
+        if (!id) {
+          ws.send(JSON.stringify({ type: "full" }));
+          return;
+        }
+
+        ws.playerId = id;
+        phoneClients.set(id, ws);
+
+        console.log(`📱 Player ${id} joined`);
+
+        // stuur ID terug naar telefoon
+        ws.send(JSON.stringify({
+          type: "assigned",
+          playerId: id
+        }));
+
+        // 🔥 vertel main dat er een nieuwe player is
+        mainClients.forEach(client => {
+          if (client.readyState === 1) {
+            client.send(JSON.stringify({
+              type: "playerJoined",
+              playerId: id
+            }));
+          }
+        });
+
+        return;
+      }
+
+      // 📱 INPUT
+      if (data.type === "phone") {
+        if (!ws.playerId) return;
+
+        data.playerId = ws.playerId;
 
         mainClients.forEach(client => {
-          if (client.readyState === 1) { // OPEN
+          if (client.readyState === 1) {
             client.send(JSON.stringify(data));
           }
         });
@@ -65,11 +103,25 @@ wss.on('connection', (ws) => {
 
     mainClients.delete(ws);
 
-    if (phoneClient === ws) {
-      phoneClient = null;
+    if (ws.playerId !== null) {
+      phoneClients.delete(ws.playerId);
+      console.log(`❌ Player ${ws.playerId} left`);
+    }
+
+    if (ws.playerId !== null) {
+
+      mainClients.forEach(client => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: "playerLeft",
+            playerId: ws.playerId
+          }));
+        }
+      });
+
+      phoneClients.delete(ws.playerId);
     }
   });
-
 });
 
 server.listen(port, () => {
