@@ -1,8 +1,12 @@
-import * as THREE from 'https://cdn.skypack.dev/three@0.129.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
+// import * as THREE from 'https://cdn.skypack.dev/three@0.129.0/build/three.module.js';
+// import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
 
+import * as THREE from 'https://esm.sh/three@0.129.0';
+import { GLTFLoader } from 'https://esm.sh/three@0.129.0/examples/jsm/loaders/GLTFLoader.js';
 // 🌐 WebSocket
 const ws = new WebSocket('ws://192.168.2.33:8080');
+// const ws = new WebSocket('ws://10.16.34.138:8080');
+
 
 // 🎮 Players systeem
 let players = {};
@@ -47,6 +51,7 @@ loader.load('assets/models/map/scene.gltf', (gltf) => {
 // 👤 Player maken
 function createPlayer(id) {
     loader.load('assets/models/drone/scene.gltf', (gltfDrone) => {
+        console.log("🚁 Drone model loaded for player:", id);
         const drone = gltfDrone.scene;
         drone.scale.set(5, 5, 5);
 
@@ -54,6 +59,12 @@ function createPlayer(id) {
         drone.position.set(id * 2, 1, 0);
 
         scene.add(drone);
+
+        // Animation mixer voor drone animaties - alleen animatie op index 1 (hover of vliegen)
+        const mixer = new THREE.AnimationMixer(drone);
+        if (gltfDrone.animations[0]) {
+            mixer.clipAction(gltfDrone.animations[0]).play();
+        }
 
         const camera = new THREE.PerspectiveCamera(
             75,
@@ -65,11 +76,16 @@ function createPlayer(id) {
         players[id] = {
             drone,
             camera,
+            mixer,
             input: { throttle: 0, pitch: 0, roll: 0, yaw: 0 }
         };
 
         console.log("✅ Player created:", id);
 
+    },
+    undefined,
+    (error) => {
+        console.error("❌ Drone load error:", error);
     });
 }
 
@@ -204,7 +220,10 @@ function renderSplitScreen() {
 function animate() {
     requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
+
     Object.values(players).forEach(player => {
+        if (player.mixer) player.mixer.update(delta);
         updateDrone(player);
     });
 
